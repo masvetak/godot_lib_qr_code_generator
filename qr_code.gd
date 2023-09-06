@@ -169,7 +169,7 @@ func get_texture(input: String) -> ImageTexture:
 func get_num_raw_data_modules(ver: int) ->  int:
 		var result: int = (16 * ver + 128) * ver + 64
 		if ver >= 2:
-			var num_align: int = floor(ver / 7) + 2
+			var num_align: int = floor(float(ver) / 7.0) + 2
 			result -= (25 * num_align - 10) * num_align - 55
 		
 		if ver >= 7:
@@ -265,7 +265,6 @@ func _encode_numeric(value: String) -> void:
 
 func _encode_alphanumeric(value: String) -> void:
 	qr_data_list = []
-	var data: Array = []
 	for index in range(0, ceil(value.length() / 2.0)):
 		var first_value: int = QRCodeUtils.ALPHANUMERIC_CHARACTERS[value[index * 2]]
 		var second_value: int = -1
@@ -287,7 +286,8 @@ func _encode_bytes(value: String) -> void:
 	for byte in byte_array:
 		qr_data_list.append_array(QRCodeUtils.convert_to_binary(byte))
 
-func _encode_kanji(value: String) -> void:
+func _encode_kanji(_value: String) -> void:
+	# TODO: implement
 	pass
 
 func _set_minimum_type_number() -> void:
@@ -331,7 +331,7 @@ func _set_info_segments() -> void:
 	
 	var padding_bits = PADDING_BITS.duplicate()
 	
-	while qr_data_list.size() / 8 < max_capacity:
+	while float(qr_data_list.size()) / 8.0 < max_capacity:
 		qr_data_list.append_array(padding_bits[0])
 		padding_bits.reverse()
 
@@ -339,9 +339,9 @@ func _split_data_into_blocks() -> void:
 	var num_blocks: int = NUM_ERROR_CORRECTION_BLOCKS[error_correct_level][type_number - 1]
 	var block_ecc_len: int = ECC_CODEWORDS_PER_BLOCK[error_correct_level][type_number - 1]
 	
-	var rawCodewords: int = floor(get_num_raw_data_modules(type_number) / 8)
+	var rawCodewords: int = floor(float(get_num_raw_data_modules(type_number)) / 8.0)
 	var numShortBlocks: int = num_blocks - rawCodewords % num_blocks
-	var shortBlockLen: int = floor(rawCodewords / num_blocks)
+	var shortBlockLen: int = floor(float(rawCodewords) / float(num_blocks))
 	
 	var result: = []
 	var off = 0
@@ -358,7 +358,7 @@ func _split_data_into_blocks() -> void:
 func _set_error_correction() -> void:
 	ecc_data_list = []
 	var block_ecc_len: int = ECC_CODEWORDS_PER_BLOCK[error_correct_level][type_number - 1]
-	var short_block_data_len: int = qr_data_list[0].size()
+	# var short_block_data_len: int = qr_data_list[0].size()
 	
 	var rs = ReedSolomonGenerator.new(block_ecc_len)
 	
@@ -457,7 +457,7 @@ func _set_version_information() -> void:
 		var color: bool = ((bits >> index) & 1) != 0
 		
 		var a: int = modules.size() - 11 + index % 3
-		var b: int = floor(index / 3)
+		var b: int = floor(float(index) / 3.0)
 		modules[a][b] = color
 		modules[b][a] = color
 
@@ -566,7 +566,7 @@ func get_lost_point() -> int:
 			if modules[row][col]:
 				dark_count += 1
 	
-	var ratio = abs(100 * dark_count / module_count / module_count - 50) / 5
+	var ratio = abs(100.0 * float(dark_count) / float(module_count) / float(module_count) - 50) / 5
 	lost_point += ratio * 10
 	
 	return lost_point
