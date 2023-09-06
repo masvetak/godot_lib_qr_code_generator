@@ -142,15 +142,16 @@ const PADDING_BITS = [
 ]
 
 var error_correct_level = ERROR_CORRECT_LEVEL.LOW
+
 var type_number : int = 1
+
 var encoding = ENCODINGS.BYTES
 
-var modules : Array = []
 var module_count : int = 0
+var modules : Array = []
 
-var qr_data_list : Array = []
 var qr_data_length : int = 0
-
+var qr_data_list : Array = []
 var ecc_data_list : Array = []
 
 # ------------------------------------------------------------------------------
@@ -168,7 +169,7 @@ func get_texture(input: String) -> ImageTexture:
 func get_num_raw_data_modules(ver: int) ->  int:
 		var result: int = (16 * ver + 128) * ver + 64
 		if ver >= 2:
-			var num_align: int = floor(float(ver) / 7.0) + 2
+			var num_align: int = floor(ver / 7) + 2
 			result -= (25 * num_align - 10) * num_align - 55
 		
 		if ver >= 7:
@@ -181,9 +182,9 @@ func generate(input: String, mask_pattern: int) -> Array:
 	_encode_data(input)
 	_set_minimum_type_number()
 	_set_info_segments()
-	_set_error_correction()
 	_split_data_into_blocks()
-	
+	_set_error_correction()
+
 	module_count = type_number * 4 + 17
 	modules = []
 	for row in range(module_count):
@@ -222,7 +223,7 @@ func _set_encoding_type(value: String) -> void:
 	if is_numeric:
 		encoding = ENCODINGS.NUMERIC
 		return
-		
+	
 	var is_alphanumeric = true
 	for character in value:
 		is_alphanumeric = is_alphanumeric && QRCodeUtils.ALPHANUMERIC_CHARACTERS.has(character)
@@ -246,7 +247,6 @@ func _encode_data(value: String) -> void:
 		ENCODINGS.KANJI:
 			_encode_kanji(value)
 
-
 func _encode_numeric(value: String) -> void:
 	qr_data_list = []
 	var data = []
@@ -265,6 +265,7 @@ func _encode_numeric(value: String) -> void:
 
 func _encode_alphanumeric(value: String) -> void:
 	qr_data_list = []
+	var data: Array = []
 	for index in range(0, ceil(value.length() / 2.0)):
 		var first_value: int = QRCodeUtils.ALPHANUMERIC_CHARACTERS[value[index * 2]]
 		var second_value: int = -1
@@ -286,7 +287,7 @@ func _encode_bytes(value: String) -> void:
 	for byte in byte_array:
 		qr_data_list.append_array(QRCodeUtils.convert_to_binary(byte))
 
-func _encode_kanji(_value: String) -> void:
+func _encode_kanji(value: String) -> void:
 	pass
 
 func _set_minimum_type_number() -> void:
@@ -307,7 +308,7 @@ func _get_length_bits_size(version: int) -> int:
 	
 	if version >= 10:
 		length_bits_size = LENGTH_INFO_BITS[encoding][1]
-		
+	
 	if version >= 27:
 		length_bits_size = LENGTH_INFO_BITS[encoding][2]
 	
@@ -330,26 +331,24 @@ func _set_info_segments() -> void:
 	
 	var padding_bits = PADDING_BITS.duplicate()
 	
-	while int(float(qr_data_list.size()) / 8.0) < max_capacity:
+	while qr_data_list.size() / 8 < max_capacity:
 		qr_data_list.append_array(padding_bits[0])
 		padding_bits.reverse()
 
 func _split_data_into_blocks() -> void:
 	var num_blocks: int = NUM_ERROR_CORRECTION_BLOCKS[error_correct_level][type_number - 1]
-	
 	var block_ecc_len: int = ECC_CODEWORDS_PER_BLOCK[error_correct_level][type_number - 1]
 	
-	var rawCodewords: int = floor(float(get_num_raw_data_modules(type_number)) / 8.0)
+	var rawCodewords: int = floor(get_num_raw_data_modules(type_number) / 8)
 	var numShortBlocks: int = num_blocks - rawCodewords % num_blocks
-	var shortBlockLen: int = floor(float(rawCodewords) / float(num_blocks))
+	var shortBlockLen: int = floor(rawCodewords / num_blocks)
 	
 	var result: = []
 	var off = 0
 	
 	for block_index in range(num_blocks):
 		var end: int = off + (shortBlockLen - block_ecc_len + int(block_index >= numShortBlocks)) * 8
-	
-		var block: Array = qr_data_list.slice(off, end - 1);
+		var block: Array = qr_data_list.slice(off, end);
 		
 		result.push_back(block);
 		off = end
@@ -359,6 +358,8 @@ func _split_data_into_blocks() -> void:
 func _set_error_correction() -> void:
 	ecc_data_list = []
 	var block_ecc_len: int = ECC_CODEWORDS_PER_BLOCK[error_correct_level][type_number - 1]
+	var short_block_data_len: int = qr_data_list[0].size()
+	
 	var rs = ReedSolomonGenerator.new(block_ecc_len)
 	
 	for block_index in range(qr_data_list.size()):
@@ -415,7 +416,6 @@ func _set_position_detection_pattern(row, col) -> void:
 		for c in range(-1, 8):
 			if (row + r <= -1 or module_count <= row + r or col + c <= -1 or module_count <= col + c):
 				continue
-			
 			modules[row + r][col + c] = (
 				(0 <= r and r <= 6 and (c == 0 or c == 6) )
 				or (0 <= c and c <= 6 and (r == 0 or r == 6) )
@@ -428,7 +428,6 @@ func _set_alignment_pattern() -> void:
 		for col in patterns:
 			if modules[row][col] != null:
 				continue
-			
 			for x in range(-2, 3):
 				for y in range(-2, 3):
 					modules[row + x][col + y] = (
@@ -458,15 +457,15 @@ func _set_version_information() -> void:
 		var color: bool = ((bits >> index) & 1) != 0
 		
 		var a: int = modules.size() - 11 + index % 3
-		var b: int = floor(float(index) / 3.0)
+		var b: int = floor(index / 3)
 		modules[a][b] = color
 		modules[b][a] = color
 
 func _setup_type_info(mask_pattern) -> void:
 	var bits: int = 0;
 	var data = (ERROR_CORRECT_LEVEL_BITS[error_correct_level] << 3) | mask_pattern
-	var rem: int = data
 	
+	var rem: int = data
 	for i in range(10):
 		rem = (rem << 1) ^ ((rem >> 9) * 0x537)
 	bits = (data << 10 | rem) ^ 0x5412;
@@ -527,25 +526,37 @@ func get_lost_point() -> int:
 	
 	# LEVEL3
 	for row in range(module_count):
-		for col in range(module_count - 6):
-			if (modules[row][col]
-					and not modules[row][col + 1]
-					and     modules[row][col + 2]
-					and     modules[row][col + 3]
-					and     modules[row][col + 4]
-					and not modules[row][col + 5]
-					and     modules[row][col + 6] ):
+		for col in range(module_count - 10):
+			if (
+				modules[row][col]
+				and not modules[row][col + 1]
+				and     modules[row][col + 2]
+				and     modules[row][col + 3]
+				and     modules[row][col + 4]
+				and not modules[row][col + 5]
+				and     modules[row][col + 6]
+				and not modules[row][col + 7]
+				and not modules[row][col + 8]
+				and not modules[row][col + 9]
+				and not modules[row][col + 10]
+			):
 				lost_point += 40
 	
 	for col in range(module_count):
-		for row in range(module_count - 6):
-			if (modules[row][col]
-					and not modules[row + 1][col]
-					and     modules[row + 2][col]
-					and     modules[row + 3][col]
-					and     modules[row + 4][col]
-					and not modules[row + 5][col]
-					and     modules[row + 6][col] ):
+		for row in range(module_count - 10):
+			if (
+				modules[row][col]
+				and not modules[row + 1][col]
+				and     modules[row + 2][col]
+				and     modules[row + 3][col]
+				and     modules[row + 4][col]
+				and not modules[row + 5][col]
+				and     modules[row + 6][col]
+				and not modules[row + 7][col]
+				and not modules[row + 8][col]
+				and not modules[row + 9][col]
+				and not modules[row + 10][col]
+			):
 				lost_point += 40
 	
 	# LEVEL4
@@ -555,15 +566,13 @@ func get_lost_point() -> int:
 			if modules[row][col]:
 				dark_count += 1
 	
-	var ratio = abs(100.0 * float(dark_count) / float(module_count) / float(module_count) - 50.0) / 5
+	var ratio = abs(100 * dark_count / module_count / module_count - 50) / 5
 	lost_point += ratio * 10
 	
 	return lost_point
 
 func _generate_texture_image(data: Array) -> ImageTexture:
-	var image: Image = Image.new()
-	
-	image = Image.create(data.size() + 2, data.size() + 2, false, Image.FORMAT_RGB8)
+	var image: Image = Image.create(data.size() + 2, data.size() + 2, false, Image.FORMAT_RGB8)
 	image.fill(Color.WHITE)
 	
 	for row in range(data.size()):
@@ -572,29 +581,21 @@ func _generate_texture_image(data: Array) -> ImageTexture:
 			
 			if data[row][col] == null:
 				color = Color.GRAY
-				
+			
 			image.set_pixel(row + 1, col + 1, color)
 	
-	var texture: ImageTexture = ImageTexture.new()
-	texture = ImageTexture.create_from_image(image)
-	
-	return texture
+	return ImageTexture.create_from_image(image)
+
 
 func _get_data_zigzag_positions() -> Array:
 	var result := [];
 	
 	for row in range(modules.size() - 1, 1, -2):
-		
-		# test if it's ok
 		if row <= 6:
 			row -= 1
-		
 		for col in range(0, modules.size()):
 			for index in range(0, 2):
 				var position: Vector2 = Vector2(row - index, col)
-				
-				
-				# test upward
 				if ((row + 1) & 2) == 0:
 					position.y = modules.size() - 1 - col
 					
@@ -620,3 +621,9 @@ func _set_data(zig_zag_positions: Array) -> void:
 					var position = zig_zag_positions[position_index]
 					modules[position.x][position.y] = ecc_data_list[row][index * 8 + bits]
 					position_index += 1
+	
+	# Add Remainder Bits if necessary.
+	while position_index < zig_zag_positions.size():
+		var position = zig_zag_positions[position_index]
+		modules[position.x][position.y] = false
+		position_index += 1
